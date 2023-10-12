@@ -5,6 +5,11 @@ from PIL import Image
 import subprocess
 import subprocess
 import logging
+import os
+import requests
+import random
+import datetime
+
 
 log_fmt ='%(asctime)s [%(levelname)s] %(message)s'
 logging.basicConfig(format=log_fmt, level=logging.INFO)
@@ -71,6 +76,26 @@ def resize_and_crop(image, target_width, target_height):
     return image
 
 
+def make_safe_filename(s):
+    def safe_char(c):
+        if c.isalnum() or c=='.':
+            return c
+        else:
+            return "_"
+
+    safe = ""
+    last_safe=False
+    for c in s:
+      if len(safe) > 200:
+        return safe + "_" + str(time.time_ns() // 1000000)
+
+      safe_c = safe_char(c)
+      curr_safe = c != safe_c
+      if not last_safe or not curr_safe:
+        safe += safe_c
+      last_safe=curr_safe
+    return safe
+
 def merge_images(img1_path, img2_path, resolution1, resolution2, output_path):
     # Parse resolutions
     width1, height1 = int(resolution1[0]), int(resolution1[1])
@@ -96,12 +121,71 @@ def merge_images(img1_path, img2_path, resolution1, resolution2, output_path):
     # Save the merged image
     merged_img.save(output_path)
 
+def fetch_bing_image(output_path, days_in_past=0):
+    # Base URL for Bing Image of the Day API with a placeholder for the idx value
+    BASE_URL = "https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n=1&mkt=en-US"
+    
+    
+    # Make a request to the Bing API with idx
+    response = requests.get(BASE_URL.format(idx=days_in_past))
+    response.raise_for_status()  # Raise an error for failed requests
+    
+    # Extract image URL from the JSON response
+    data = response.json()
+    image_url = "https://www.bing.com" + data["images"][0]["url"]
+    image_title = data["images"][0]["title"]
+    
+    # Download the image
+    image_response = requests.get(image_url, stream=True)
+    image_response.raise_for_status()
+    
+    # Save the image to the specified path
+    fn = os.path.join(output_path, make_safe_filename(image_title)+'.jpg')
+    with open( fn, 'wb') as file:
+        for chunk in image_response.iter_content(1024):
+            file.write(chunk)
 
-import os
-import requests
-import random
-from datetime import datetime, timedelta
+    logger.info(f"Downloaded random Bing image from {days_in_past} days ago to {fn}")
+    return fn
 
+def fetch_nasa_image(output_path, days_in_past=0):
+    
+    NASA_API_ENDPOINT = "https://api.nasa.gov/planetary/apod"
+    NASA_API_KEY = os.environ['NASA_API_KEY']
+
+    # Calculate date
+    desired_date = datetime.date.today() - datetime.timedelta(days=days_in_past)
+    
+    params = {
+        'api_key': NASA_API_KEY,
+        'date': desired_date.isoformat()
+    }
+    response = requests.get(NASA_API_ENDPOINT, params=params)
+    response.raise_for_status()
+    
+    data = response.json()
+    
+    # Check if the returned data has an image (and not a video or something else)
+    if data['media_type'] == 'image':
+        image_url = data['url']
+        image_title = data.get('title', 'nasa_apod').replace(' ', '_')  # Use the title or default to 'nasa_apod'
+        image_response = requests.get(image_url, stream=True)
+        image_response.raise_for_status()
+        
+        # Save the image with a meaningful title
+        filename = f"{image_title}_{desired_date}.jpg"
+        full_output_path = os.path.join(output_path, filename)
+        
+        with open(full_output_path, 'wb') as file:
+            for chunk in image_response.iter_content(1024):
+                file.write(chunk)
+
+        print(f"Downloaded NASA APOD titled '{image_title}' for {desired_date} to {full_output_path}")
+    else:
+        print(f"Media for {desired_date} is not an image. Skipping.")
+
+    return full_output_path
+    
 def get_random_date(start_date_str, end_date_str):
     # Convert string dates to datetime objects
     start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -129,48 +213,19 @@ if __name__ == '__main__':
     adjusted_res1 = (int(resolution1.split('x')[0]) * scale1, int(resolution1.split('x')[1]) * scale1)
     adjusted_res2 = (int(resolution2.split('x')[0]) * scale2, int(resolution2.split('x')[1]) * scale2)
 
+    logger.info( f'Monitor resolutions {adjusted_res1} {adjusted_res2}'  )
 
     # Directory to save the wallpaper
-    WALLPAPER_DIR = os.path.join(os.getenv("HOME"), "Pictures/nasa")
+    WALLPAPER_DIR = os.path.join(os.getenv("HOME"), "Pictures/wallpaper")
 
     # Create directory if it doesn't exist
     if not os.path.exists(WALLPAPER_DIR):
         os.makedirs(WALLPAPER_DIR)
 
-    # Your NASA API key
-    NASA_API_KEY = os.environ['NASA_API_KEY']
+    img1_path = fetch_bing_image( WALLPAPER_DIR,2)
+    img2_path = fetch_nasa_image( WALLPAPER_DIR,2 )
 
-    # Get two random dates
-    first_random_date = get_random_date("1995-06-16", datetime.now().strftime("%Y-%m-%d"))
-    second_random_date = get_random_date("1995-06-16", datetime.now().strftime("%Y-%m-%d"))
-
-    logger.info('Fetching image 1')
-
-    # Fetch and download image for the first random date
-    response1 = requests.get(f"https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}&date={first_random_date}")
-    response1.raise_for_status()
-
-    image_url1 = response1.json()["url"]
-    img1_path = os.path.join(WALLPAPER_DIR, f"nasa_apod_{first_random_date}.jpg")        
-
-    with open(img1_path, 'wb') as f:
-        f.write(requests.get(image_url1).content)
-
-    
-    logger.info('Fetching image 2')
-
-    # Fetch and download image for the second random date
-    response2 = requests.get(f"https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}&date={second_random_date}")
-    response2.raise_for_status()
-    
-    image_url2 = response2.json()["url"]
-    img2_path = os.path.join(WALLPAPER_DIR, f"nasa_apod_{second_random_date}.jpg")
-    with open(img2_path, 'wb') as f:
-        f.write(requests.get(image_url2).content)
-
-    logger.info( f'Monitor resolutions {adjusted_res1} {adjusted_res2}'  )
-
-    output_path = os.path.join(os.getenv("HOME"), "Pictures/", "merged.jpg")
+    output_path = os.path.join(WALLPAPER_DIR, "merged.jpg")
 
     merge_images(img1_path, img2_path, adjusted_res2, adjusted_res1, output_path)
     logger.info(f"Merged wallpaper saved at {output_path}")
