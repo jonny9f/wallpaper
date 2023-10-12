@@ -43,6 +43,34 @@ def get_monitor_info():
     return monitor_info
 
 
+def resize_and_crop(image, target_width, target_height):
+    # Calculate the aspect ratio of the image and target dimensions
+    img_aspect = image.width / image.height
+    target_aspect = target_width / target_height
+
+    # Determine the dimensions to resize to while maintaining aspect ratio
+    if img_aspect > target_aspect:
+        # Image is wider than the target dimension
+        width = int(target_height * img_aspect)
+        height = target_height
+    else:
+        # Image is taller or equal to the target dimension
+        height = int(target_width / img_aspect)
+        width = target_width
+
+    # Resize the image while maintaining its aspect ratio
+    image = image.resize((width, height))
+
+    # Calculate the position to crop the image to the target size
+    x_offset = (width - target_width) // 2
+    y_offset = (height - target_height) // 2
+
+    # Crop the image
+    image = image.crop((x_offset, y_offset, x_offset + target_width, y_offset + target_height))
+
+    return image
+
+
 def merge_images(img1_path, img2_path, resolution1, resolution2, output_path):
     # Parse resolutions
     width1, height1 = int(resolution1[0]), int(resolution1[1])
@@ -54,10 +82,10 @@ def merge_images(img1_path, img2_path, resolution1, resolution2, output_path):
     img1 = Image.open(img1_path)
     img2 = Image.open(img2_path)
 
-    # Resize the images to the respective monitor's resolution
-    img1 = img1.resize((width1, height1))
-    img2 = img2.resize((width2, height2))
-
+    # Resize the images without distortion
+    img1 = resize_and_crop(img1, width1, height1)
+    img2 = resize_and_crop(img2, width2, height2)
+                        
     # Create a new image with combined width and max height of the two
     merged_img = Image.new('RGB', (width1 + width2, max(height1, height2)))
 
