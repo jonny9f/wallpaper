@@ -1,5 +1,5 @@
 # Multi monitor Wallpaper Changer for GNOME
-Simple script to rotate wallpapers for Multiplt monitors
+Simple script to rotate wallpapers for Multiple monitors
 
 Currently just grabs wallpaper from NASA POD.
 
