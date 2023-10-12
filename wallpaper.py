@@ -9,6 +9,7 @@ import os
 import requests
 import random
 import datetime
+import time
 
 
 log_fmt ='%(asctime)s [%(levelname)s] %(message)s'
@@ -174,7 +175,7 @@ def fetch_nasa_image(output_path, days_in_past=0):
         
         # Save the image with a meaningful title
         filename = f"{image_title}_{desired_date}.jpg"
-        full_output_path = os.path.join(output_path, filename)
+        full_output_path = os.path.join(output_path, make_safe_filename(filename))
         
         with open(full_output_path, 'wb') as file:
             for chunk in image_response.iter_content(1024):
@@ -186,16 +187,6 @@ def fetch_nasa_image(output_path, days_in_past=0):
 
     return full_output_path
     
-def get_random_date(start_date_str, end_date_str):
-    # Convert string dates to datetime objects
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-
-    # Generate a random timedelta between start and end dates
-    random_days = random.randint(0, (end_date - start_date).days)
-    
-    # Return the random date formatted as a string
-    return (start_date + timedelta(days=random_days)).strftime("%Y-%m-%d")
 
 def set_wallpaper(file_path):
     subprocess.run(['gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', f"file://{file_path}"])
@@ -222,8 +213,8 @@ if __name__ == '__main__':
     if not os.path.exists(WALLPAPER_DIR):
         os.makedirs(WALLPAPER_DIR)
 
-    img1_path = fetch_bing_image( WALLPAPER_DIR,2)
-    img2_path = fetch_nasa_image( WALLPAPER_DIR,2 )
+    img1_path = fetch_bing_image( WALLPAPER_DIR )
+    img2_path = fetch_nasa_image( WALLPAPER_DIR )
 
     output_path = os.path.join(WALLPAPER_DIR, "merged.jpg")
 
