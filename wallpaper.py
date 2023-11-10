@@ -193,6 +193,8 @@ def set_wallpaper(file_path):
     subprocess.run(['gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', f"file://{file_path}"])
 
 
+wallpaper_providers = [fetch_bing_image, fetch_nasa_image]
+
 if __name__ == '__main__':
 
     monitors = get_monitor_info()
@@ -219,11 +221,8 @@ if __name__ == '__main__':
     # Loop through the resolutions and alternate between Bing and NASA images
     images = []
     for i, resolution in enumerate(adjusted_resolutions):
-      if i % 2 == 0:
-        img_path = fetch_bing_image(WALLPAPER_DIR)
-      else:
-        img_path = fetch_nasa_image(WALLPAPER_DIR)
-
+      wallpaper_providers_index = i % len(wallpaper_providers)
+      img_path = wallpaper_providers[wallpaper_providers_index](WALLPAPER_DIR)
       images.append((img_path, resolution))
       logger.info(f"Wallpaper saved at {output_path} for resolution {resolution}")
 
