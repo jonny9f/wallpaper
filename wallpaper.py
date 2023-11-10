@@ -65,7 +65,8 @@ def resize_and_crop(image, target_width, target_height):
         width = target_width
 
     # Resize the image while maintaining its aspect ratio
-    image = image.resize((width, height))
+    new_size = (width, height)
+    image = image.resize( new_size )
 
     # Calculate the position to crop the image to the target size
     x_offset = (width - target_width) // 2
@@ -97,30 +98,30 @@ def make_safe_filename(s):
       last_safe=curr_safe
     return safe
 
-def merge_images(img1_path, img2_path, resolution1, resolution2, output_path):
-    # Parse resolutions
-    width1, height1 = int(resolution1[0]), int(resolution1[1])
-    width2, height2 = int(resolution2[0]), int(resolution2[1])
+def merge_images(image_list, output_path):
+  # Open the images and resize them without distortion
+  images = []
+  widths = []
+  heights = []
+  for image_path, resolution in image_list:
+    image = Image.open(image_path)
+    width, height = resolution
+    image = resize_and_crop(image, width, height)
+    images.append(image)
+    widths.append(width)
+    heights.append(height)
 
-    
+  # Create a new image with combined width and max height of the images
+  merged_img = Image.new('RGB', (sum(widths), max(heights)))
 
-    # Open the images
-    img1 = Image.open(img1_path)
-    img2 = Image.open(img2_path)
+  # Paste the images side by side on the new image
+  x_offset = 0
+  for i, image in enumerate(images):
+    merged_img.paste(image, (x_offset, 0))
+    x_offset += widths[i]
 
-    # Resize the images without distortion
-    img1 = resize_and_crop(img1, width1, height1)
-    img2 = resize_and_crop(img2, width2, height2)
-                        
-    # Create a new image with combined width and max height of the two
-    merged_img = Image.new('RGB', (width1 + width2, max(height1, height2)))
-
-    # Paste the images side by side on the new image
-    merged_img.paste(img1, (0, 0))
-    merged_img.paste(img2, (width1, 0))
-
-    # Save the merged image
-    merged_img.save(output_path)
+  # Save the merged image
+  merged_img.save(output_path)
 
 def fetch_bing_image(output_path, days_in_past=0):
     # Base URL for Bing Image of the Day API with a placeholder for the idx value
@@ -196,31 +197,38 @@ if __name__ == '__main__':
 
     monitors = get_monitor_info()
 
-    # Here's an example of how you'd access the data for the first two monitors:
-    monitor1_name, resolution1, scale1 = monitors[0]
-    monitor2_name, resolution2, scale2 = monitors[1]
+    # Adjust the resolutions based on the scaling factors for all monitors
+    adjusted_resolutions = []
+    for monitor in monitors:
+      monitor_name, resolution, scale = monitor
+      adjusted_resolutions.append(
+         (int(int(resolution.split('x')[0]) * scale), 
+          int(int(resolution.split('x')[1]) * scale)))
 
-    # Adjust the resolutions based on the scaling factors
-    adjusted_res1 = (int(resolution1.split('x')[0]) * scale1, int(resolution1.split('x')[1]) * scale1)
-    adjusted_res2 = (int(resolution2.split('x')[0]) * scale2, int(resolution2.split('x')[1]) * scale2)
-
-    logger.info( f'Monitor resolutions {adjusted_res1} {adjusted_res2}'  )
+    logger.info(f"Monitor resolutions: {adjusted_resolutions}")
 
     # Directory to save the wallpaper
     WALLPAPER_DIR = os.path.join(os.getenv("HOME"), "Pictures/wallpaper")
 
     # Create directory if it doesn't exist
     if not os.path.exists(WALLPAPER_DIR):
-        os.makedirs(WALLPAPER_DIR)
-
-    img1_path = fetch_bing_image( WALLPAPER_DIR )
-    img2_path = fetch_nasa_image( WALLPAPER_DIR )
+      os.makedirs(WALLPAPER_DIR)
 
     output_path = os.path.join(WALLPAPER_DIR, "merged.jpg")
 
-    merge_images(img1_path, img2_path, adjusted_res2, adjusted_res1, output_path)
-    logger.info(f"Merged wallpaper saved at {output_path}")
+    # Loop through the resolutions and alternate between Bing and NASA images
+    images = []
+    for i, resolution in enumerate(adjusted_resolutions):
+      if i % 2 == 0:
+        img_path = fetch_bing_image(WALLPAPER_DIR)
+      else:
+        img_path = fetch_nasa_image(WALLPAPER_DIR)
 
-    set_wallpaper( output_path )
+      images.append((img_path, resolution))
+      logger.info(f"Wallpaper saved at {output_path} for resolution {resolution}")
+
+    merge_images(images, output_path)
+
+    set_wallpaper(output_path)
 
 
